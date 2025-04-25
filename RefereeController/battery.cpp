@@ -19,19 +19,21 @@
 #define VOLTAGE_100_CHARGING 4.125
 
 #define FLASH_INTERVAL 500
-#define HYSTERESIS 0.15  // Increased from 0.1 to reduce flickering
 #define NUM_READINGS 10
-#define ADC_SAMPLES 5  // Number of ADC samples to average for a single reading
+#define ADC_SAMPLES 10  // Number of ADC samples to average for a single reading
 
 // Critical battery voltage threshold
 #define CRITICAL_BATTERY_VOLTAGE 3.1
 
 // Calibration constants
-#define DEFAULT_CALIBRATION_FACTOR 1.12  // Initial calibration factor (4.1/3.7)
+#define DEFAULT_CALIBRATION_FACTOR 1.08  // Initial calibration factor (4.1/3.7)
 float calibrationFactor = DEFAULT_CALIBRATION_FACTOR;
 #define ADC_RESOLUTION 4095.0
 #define REFERENCE_VOLTAGE 3.3
 #define VOLTAGE_DIVIDER_RATIO 2.0
+
+// Variable to track lowest recorded voltage
+float lowestVoltage = VOLTAGE_100;
 
 // Reads a single voltage value with averaging to reduce noise
 float readRawVoltage() {
@@ -40,7 +42,7 @@ float readRawVoltage() {
   // Take multiple samples and average them
   for (int i = 0; i < ADC_SAMPLES; i++) {
     adcSum += analogRead(BATTERY_ADC_PIN);
-    delay(5); // Small delay between readings
+    delay(50); // Small delay between readings
   }
   
   int adcValue = adcSum / ADC_SAMPLES;
@@ -101,10 +103,10 @@ void setupBatteryPins() {
 int getActiveLED(float voltage, bool isCharging) {
   float fullVoltage = isCharging ? VOLTAGE_100_CHARGING : VOLTAGE_100;
   
-  if (voltage >= fullVoltage - HYSTERESIS) return batteryPins[3];
-  if (voltage >= VOLTAGE_75 - HYSTERESIS) return batteryPins[2];
-  if (voltage >= VOLTAGE_50 - HYSTERESIS) return batteryPins[1];
-  if (voltage >= VOLTAGE_25 - HYSTERESIS) return batteryPins[0];
+  if (voltage >= fullVoltage) return batteryPins[3];
+  if (voltage >= VOLTAGE_75) return batteryPins[2];
+  if (voltage >= VOLTAGE_50) return batteryPins[1];
+  if (voltage >= VOLTAGE_25) return batteryPins[0];
   return -1; // No LED if voltage is below all thresholds
 }
 
@@ -115,6 +117,18 @@ void updateBatteryLEDs(float voltage, int activeLED, bool flashState) {
   float fullVoltage = isCharging ? VOLTAGE_100_CHARGING : VOLTAGE_100;
   bool isFullyCharged = (voltage >= fullVoltage);
   bool isCriticallyLow = (!isCharging && voltage < CRITICAL_BATTERY_VOLTAGE);
+  
+  // Update lowest voltage tracking
+  if (!isCharging) {
+    if (voltage < lowestVoltage) {
+      lowestVoltage = voltage;
+    }
+    // Use lowestVoltage instead of actual voltage for display
+    voltage = lowestVoltage;
+  } else {
+    // Reset lowest voltage when charging
+    lowestVoltage = VOLTAGE_100;
+  }
   
   // Reset all LEDs first
   for (int i = 0; i < BATTERY_PIN_COUNT; i++) {
@@ -189,7 +203,7 @@ void batteryMonitoringTask(void *parameter) {
   
   // Print header for debug output
   Serial.println("Battery Monitoring Started");
-  Serial.println("Raw V\tCal V\tAvg V");
+  Serial.println("Raw V\tCal V\tAvg V\tLowest V");
   
   while (true) {
     // Get raw and calibrated voltage
@@ -228,6 +242,8 @@ void batteryMonitoringTask(void *parameter) {
       Serial.print(calibratedVoltage, 2);
       Serial.print("V\t");
       Serial.print(averageVoltage, 2);
+      Serial.print("V\t");
+      Serial.print(lowestVoltage, 2);
       Serial.println("V");
     }
     
