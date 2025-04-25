@@ -1,0 +1,18 @@
+
+sudo apt update
+sudo apt upgrade
+sudo apt-get install mosquitto mosquitto-clients
+
+
+sudo systemctl enable mosquitto.service 
+
+sudo nano /etc/mosquitto/mosquitto.conf
+listener 1883
+allow_anonymous true
+
+hostname -I
+192.168.86.32
+
+mosquitto_sub -d -t "topic name"
+mosquitto_pub -d -t "topic name" -m "message to send here"
+
