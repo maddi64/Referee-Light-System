@@ -67,7 +67,6 @@ def process_down_signal():
 # Function to send decision request
 def process_decision_request(ref_number):
     mqtt_client.publish(MQTT_DECISION_REQUEST_TOPIC + ref_number, "on")
-    #print(message);
     print(f"Reminder sent to referee {ref_number}.")
 
 # Function to process referee decisions
@@ -131,16 +130,19 @@ def process_referee_decision(message):
 
                     # Start auto-reset after 8 seconds
                     threading.Timer(8, resetLift).start()
-                else: 
-                    # Set a reminder for the third referee
+                else:
+                    # Only set reminder if we have exactly 2 decisions that are split
                     cancel_timer()  # Cancel existing timer
-                    if ref1Decision is None:
-                        reminder_timer = threading.Timer(3, process_decision_request, args=("1",))
-                    elif ref2Decision is None:
-                        reminder_timer = threading.Timer(3, process_decision_request, args=("2",))
-                    elif ref3Decision is None:
-                        reminder_timer = threading.Timer(3, process_decision_request, args=("3",))
-                    reminder_timer.start()
+                    if total_decided == 2:
+                        if (good_count == 1 and bad_count == 1):
+                            # Determine which referee hasn't voted
+                            if ref1Decision is None:
+                                reminder_timer = threading.Timer(3, process_decision_request, args=("1",))
+                            elif ref2Decision is None:
+                                reminder_timer = threading.Timer(3, process_decision_request, args=("2",))
+                            elif ref3Decision is None:
+                                reminder_timer = threading.Timer(3, process_decision_request, args=("3",))
+                            reminder_timer.start()
 
     except ValueError:
         print(f"Invalid message format: {message}")
@@ -160,9 +162,6 @@ def on_message(client, userdata, message):
     message_str = message.payload.decode()
     if message.topic == MQTT_DECISION_TOPIC:
         process_referee_decision(message_str)
-    #if message.topic == MQTT_DECISION_REQUEST_TOPIC:
-        #print("Message received on "+MQTT_DECISION_REQUEST_TOPIC+": Message is "+message_str)
-        #process_decision_request(message_str)
 
 # Function to set up MQTT
 def setup_mqtt():
