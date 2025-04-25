@@ -1,0 +1,138 @@
+System Components
+
+The different devices that make up the Referee Light System are: 
+
+	1. RPI Central Control Box
+	2. 3x Referee Controllers 
+	3. Decision Lightbox 
+	4. Timekeeper Box
+	5. Jury Box
+	6. 5x Jury Controllers
+
+
+System Requirements
+
+	1. RPI Central Control Box
+	
+	Hardware Requirements:
+	
+		○ PETG Enclosure for Raspberry Pi and Wireless Access Point
+		○ Mode Switch with graphics to indicate mode ('I' = Integrated, 'S'= Standalone). 
+		○ 2x Bicolour LEDs for Wi-Fi & MQTT connection indicators (white for online, red for offline) 
+		○ An icon for Wi-Fi and an icon for MQTT need to be present next to the LED indicators so that the user knows which LED indicator is for what.
+		○ RepLogic logo to be present 
+		○ USB C Charging port for 12V power supply 
+		○ There needs to be a mechanism in the housing to allow for ventilation/cooling for the RPI
+		○ Button to reset lift on all devices 
+		○ Sticker on bottom of box containing product details (SSID, Password, serial No.) 
+
+
+	Software Requirements
+	
+		○ Wi-Fi/MQTT Connection
+			§ Connect to WAP 
+			§ Start MQTT Server on RPI
+			§ Detect if MQTT/Wi-Fi is connected and turn indicator LEDs white. If not connected turn LEDs red
+		○ Decisions
+			§ Reset button sends MQTT message to all devices to reset regardless off mode
+			§ When the mode switch is pressed, it switches the mode between integrated to standalone
+			§ Standalone Mode:
+				□ The down signal is shown by simultaneously activating the buzzer and down signal LED. The buzzer switches off after 1.5 seconds and the down signal LED switches off after 3 seconds.
+				□ If there is a majority decision, send the MQTT message to trigger the down signal 
+				□ If all three decisions are made, send the MQTT message to trigger the down signal
+				□ If only 1 referee has made a decision, then neither the down signal or reminder will trigger
+				□ Any referee can change their decision as many times as they like up until 3 seconds after the down signal is given. 
+				□ The decision lights are displayed 3 seconds after the down signal is given 
+				□ If any referee has not made a decision within the 3 seconds after the down signal then the corresponding decision light is not lit up and any reminders are switched off
+				□ There is a 5 second cooling off period after the decision lights are displayed where any inputs are ignored by the system 
+			§ Integrated Mode: 
+				□ No processing action required as this is handled by the OWLCMS software
+		○ Reminder
+			§ If two referees have made a split decision and the third referee has not made a decision within 3 seconds, trigger a reminder by activating the LED and 2 haptic motors on the third referees controller only. 
+			§ Once the third referee makes a decision, the haptic motors and LED switch off.
+	
+	
+	
+	2. Referee Controllers
+	
+	Hardware Requirements
+	
+		○ PETG Enclosure that is ergonomic to hold but with a flat base to allow the controller to rest on a table and have the buttons pressed without the controller tipping over
+		○ RepLogic logo to be present 
+		○ On/Off switch 
+		○ USB C Charging port 
+		○ 4x charging indicator lights on the corner edge of the enclosure
+		○ White button for a Good lift on the left and a Red Button for a bad lift on the right
+		○ Dual colour LED (Red and White) for decision reminder, jury summon and battery disconnect indicator.
+		○ 2x Haptic motors for decision reminder
+
+
+	Software Requirements
+	
+		○ Boot Sequence
+			§ When the controllers are first turned on, the controller will take the user through the process of assigning it a referee number (1, 2 or 3).
+				□ The number of battery LEDs illuminated corresponds to the referee number selected
+				□ When the controller first boots, it loads the last saved referee number or if no referee number has been previously saved then it defaults to referee 1 (1 battery LED illuminated) 
+				□ Every time the user presses the white good lift button, the referee number is increase by one and an additional battery LED is illuminated. 
+				□ When the user presses the good lift button and the referee number is up to 3 (3 battery LEDs illuminated), it goes back to referee 1 (1 battery LED illuminated). 
+				□ The user confirms and selects the desired referee number by pressing the red bad lift button which exits this sequence. 
+				□ If the user has not selected a referee number after 15 seconds, the controller should automatically exit the sequence using whichever value is currently selected as the referee number. 
+		○ WiFi and MQTT Connection
+			§ Connect to WAP 
+			§ Connect to MQTT server running on RPI
+			§ If the WiFi or MQTT connection has not been established, the reminder LED will pulse red while it attempts to reconnect.
+			§ Once WiFi and MQTT connection has been establish the reminder LED will turn off. 
+		○ Battery Management 
+			§ Battery lights illuminated are to correspond to the battery percentage. E.g.:
+				□ 1 light: <=25%
+				□ 2 lights: >25% & <=50%
+				□ 3 lights: >50% & <=75%
+				□ 4 lights: >75% & < 100%
+			§ Battery lights will progressively light up when charging. 
+			§ The light that covers the range that the voltage is in should flash while charging
+			§ The light that covers the range that the voltage is in should be solid while not charging. 
+			§ When charging the 4th battery LED will go solid when the battery is 100% charged (at 4.1V or higher)
+			§ When the controller is not charging, the first battery LED will flash if the voltage drops under 3.1V
+			§ The code to check the battery charge should incorporate hysteresis so that the LEDs dont flicker when the Voltage is on the border of two ranges. 
+		○ Decisions
+			§ After button press, the controller sends a good or bad decision to the lightbox via MQTT
+			§ The referee can change their decision as many times as they like up until 3 seconds after the down signal has been given
+			§ In the 5 second cooling off period after the decision lights are displayed, any decision made by the referee on the controller should be ignored. 
+		○ Reminder
+			§ When a decision request for a particular referee comes through an MQTT message, the corresponding controller should activate the 2 haptic motors and illuminate the reminder LED solid white. 
+			§ Once a decision has been made by this referee, the reminder LED and haptic motors are deactivated. 
+		○ Summon
+			§ If the jury summons the referee, the reminder LED will illuminate solid red and the haptic motors will turn on and off quickly (similar to a pulse). This will occur for 5 seconds before automatically turning off.
+	
+
+	3. Decision Lightbox
+	
+	Hardware Requirements:
+	
+		○ PETG enclosure for the down signal LED and the 6 decision lights (3 on each side) 
+		○ The decision LEDs need to be bicolour (red and white) 
+		○ The down signal is a pure white LED
+		○ The housing design must not allow for light leakage between the decision lights and/or the down signal 
+		○ There must be a switch to turn the buzzer on or off. This switch should be hard wired into the buzzer so that no allowance needs to be made for the mute/unmute feature in the code
+		○ There switch must have a sounds and a mute icon so the user knows which side of the switch does what. 
+		○ 12V 5A Power Supply - USB C PD 
+		○ The must be a lightning bolt icon next to the USB C port so the user knows where to plug in the power supply.
+		○ RepLogic logo to be present 
+	
+	
+	Software Requirements
+	
+		○ Boot Sequence
+			§ When the lightbox first starts up, all decision LEDs pulse white once to indicate to the user that it is on.
+		○ WiFi and MQTT Connection
+			§ Connect to WAP 
+			§ Connect to MQTT server running on RPI
+			§ If the WiFi or MQTT connection has not been established, then all 6 decision LEDs will pulse red while it attempts to reconnect.
+			§ Once WiFi and MQTT connection has been establish the decision LEDs will turn off. 
+		○ Decisions
+			§ As decisions are coming in from the referees, the lightbox should be storing what decision each referee selected
+			§ Once the down signal MQTT message has been received, the lightbox activates the down signal LED and the buzzer simultaneously. The buzzer LED will turn off after 1.5 seconds and the down signal light turns off after 3 seconds
+			§ The lightbox then displays the corresponding decisions on the decision lights (white for good lift and red for bad lift) 3 seconds after the down signal is triggered
+			§ The lightbox must allow the referees to change their decision as many times as they like for 3 seconds after the down signal is triggered. These changes must be reflected when the decision lights are shown. 
+			§ Once the decision lights are shown, the lightbox should reset any stored referee decisions and start a 5 second cooling off period where it ignores any incoming referee decision MQTT messages.  
+	
