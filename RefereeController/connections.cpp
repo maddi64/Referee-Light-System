@@ -1,13 +1,11 @@
-#include <Arduino.h>
 #include "connections.h"
 
 const char* wifiSSID = "Wu";
 const char* wifiPassword = "Welcome98!";
 
-const char* mqttServer = "192.168.68.60";
+const char* mqttServer = "192.168.68.50";
 const char* mqttUserName= "";
 const char* mqttPassword = "";
-
 
 #ifdef TLS
 WiFiClientSecure wifiClient;
@@ -20,7 +18,6 @@ PubSubClient mqttClient;
 String macAddress;
 char mac[50];
 char clientId[50];
-
 
 void setupConnections() {
   #ifdef TLS
@@ -52,9 +49,10 @@ void wifiConnect() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
-    disconnectLEDs();
+    updateDisplay(false, false, referee, getBatteryPercentage(), "", "WiFi connection lost");
   }
   Serial.println(" connected");
+  updateDisplay(true, false, referee, getBatteryPercentage(), "", "");
 }
 
 void mqttReconnect() {
@@ -66,6 +64,7 @@ void mqttReconnect() {
   while (!mqttClient.connected()) { 
     Serial.print(macAddress);
     Serial.print(" connecting to MQTT server...");
+    updateDisplay(true, false, referee, getBatteryPercentage(), "", "Server connection lost");
 
     if (mqttClient.connect(clientId, mqttUserName, mqttPassword)) {
       Serial.println(" connected");
@@ -85,24 +84,16 @@ void mqttReconnect() {
       sprintf(resetTopic, "owlcms/reset/");
       mqttClient.subscribe(resetTopic);
 
+      char downSignalTopic[50];
+      sprintf(downSignalTopic, "owlcms/fop/down/#", fop);
+      mqttClient.subscribe(downSignalTopic);
+
+      updateDisplay(true, true, referee, getBatteryPercentage(), "", "");
     } else {
       Serial.print("MQTT connection failed, rc=");
       Serial.print(mqttClient.state());
       Serial.println(" try again in 5 second");
-      disconnectLEDs();
-      //delay(5000);
+      delay(5000);
     }
-  }
-}
-
-void disconnectLEDs() {
-  for(int dutyCycle = 0; dutyCycle <= 255; dutyCycle++){   
-    analogWrite(ledPins[0], dutyCycle);
-    delay(10);
-  }
-
-  for(int dutyCycle = 255; dutyCycle >= 0; dutyCycle--){
-    analogWrite(ledPins[0], dutyCycle);
-    delay(10);
   }
 }

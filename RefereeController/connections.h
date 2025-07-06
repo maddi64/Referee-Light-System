@@ -3,6 +3,8 @@
 
 #include <WiFi.h>
 #include "PubSubClient.h"
+#include "battery.h"
+#include "interface.h"
 
 #ifdef TLS
 #include <WiFiClientSecure.h>
@@ -19,23 +21,17 @@ extern WiFiClientSecure wifiClient;
 extern WiFiClient wifiClient;
 #endif
 
-// Declare external variables if needed
 extern PubSubClient mqttClient;
-
 extern String macAddress;
 extern char mac[50];
 extern char clientId[50];
-
 extern const char* platform;  
 extern char fop[20];  
+extern int referee;
 
-extern int ledPins[];
-
-// Function declarations
 void setupConnections();
 void wifiConnect();
 void mqttReconnect();
-void disconnectLEDs();
 void callback(char* topic, byte* payload, unsigned int length);
 
 #endif
