@@ -69,7 +69,11 @@ void drawWarningMessage(const String& message) {
 }
 
 void drawMainText(const String& text) {
-  u8g2.setFont(u8g2_font_profont22_tr);
+  if (text == "MAKE DECISION") {
+    u8g2.setFont(u8g2_font_profont17_tr);
+  } else {
+    u8g2.setFont(u8g2_font_profont22_tr);
+  }
   int textWidth = u8g2.getStrWidth(text.c_str());
   int x = (127 - textWidth) / 2;
   u8g2.drawStr(x, 41, text.c_str());

@@ -54,9 +54,13 @@ bool refSet = false;
 
 String currentDecision = "";
 String warningMessage = "";
+String reminderMessage = "";
 bool lowBattery = false;
 bool previousBatteryState = true;
 
+// Timer for clearing decision display after downSignal
+unsigned long downSignalTime = 0;
+bool downSignalReceived = false;
 
 // ====== Function Prototypes ======================================================
 void setRefNumber();
@@ -66,6 +70,7 @@ void sendDecision(int ref02Number, const char* decision);
 void changeReminderStatus(int ref13Number, boolean warn);
 void changeSummonStatus(int ref02Number, boolean warn);
 void callback(char* topic, byte* message, unsigned int length);
+void updateDisplayWithPriority(bool wifi_status, bool mqtt_status, int referee, int battery_percent, const String& mainText, const String& warning, const String& reminder);
 
 // ====== Function Definitions ======================================================
 
@@ -143,7 +148,11 @@ void buttonLoop() {
           sendDecision(j / 2, "bad");
           currentDecision = "BAD LIFT";
         }
-        updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage);
+        
+        // Clear reminder message when a decision is made
+        reminderMessage = "";
+        
+        updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
         digitalWrite(hapticPins[0], LOW);
         digitalWrite(hapticPins[1], LOW);
         return;
@@ -170,31 +179,32 @@ void changeReminderStatus(int ref13Number, boolean warn) {
   Serial.print("reminder "); Serial.print(warn); Serial.print(" "); Serial.println(ref13Number);
   if (ref13Number == referee) {
     if (warn) {
-      warningMessage = "MAKE DECISION";
+      reminderMessage = "Required for down signal";
+      currentDecision = "MAKE DECISION";
       digitalWrite(hapticPins[0], HIGH);
       digitalWrite(hapticPins[1], HIGH);
     } else {
-      warningMessage = "";
+      reminderMessage = "";
       digitalWrite(hapticPins[0], LOW);
       digitalWrite(hapticPins[1], LOW);
     }
-    updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage);
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
   }
 }
 
 void changeSummonStatus(int ref02Number, boolean warn) {
   if (warn) {
-    warningMessage = "SUMMONED BY JURY";
+    reminderMessage = "SUMMONED BY JURY";
     digitalWrite(hapticPins[0], HIGH);
     digitalWrite(hapticPins[1], HIGH);
-    updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage);
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
     
     // Start timer to clear summon after 10 seconds
     delay(10000);
-    warningMessage = "";
+    reminderMessage = "";
     digitalWrite(hapticPins[0], LOW);
     digitalWrite(hapticPins[1], LOW);
-    updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage);
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
   }
 }
 
@@ -208,6 +218,12 @@ void setupPins() {
     pinMode(hapticPins[j], OUTPUT);
     digitalWrite(hapticPins[j], LOW);
   }
+}
+
+// Priority display function: reminder messages take priority over warning messages
+void updateDisplayWithPriority(bool wifi_status, bool mqtt_status, int referee, int battery_percent, const String& mainText, const String& warning, const String& reminder) {
+  String displayMessage = reminder.length() > 0 ? reminder : warning;
+  updateDisplay(wifi_status, mqtt_status, referee, battery_percent, mainText, displayMessage);
 }
 
 // ====== MQTT Callback ======================================================
@@ -241,18 +257,18 @@ void callback(char* topic, byte* message, unsigned int length) {
     }
   } else if (stTopic.startsWith(resetTopic)) {
     currentDecision = "";
-    warningMessage = "";
-    updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), "", "");
+    reminderMessage = "";
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), "", warningMessage, reminderMessage);
   } else if (stTopic.startsWith(downSignalTopic)) {
-    currentDecision = "";
-    warningMessage = "";
-    updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), "", "");
+    // Start 3-second timer to clear decision display
+    downSignalTime = millis();
+    downSignalReceived = true;
   }
 }
 
 void noWarning() {
-  warningMessage = "";
-  updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), "", warningMessage);
+  reminderMessage = "";
+  updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), "", warningMessage, reminderMessage);
 }
 
 void lowBatteryCheck() {
@@ -273,25 +289,14 @@ void setup() {
   // Initialize OLED display
   Wire.begin(SDA_PIN, SCL_PIN);
   u8g2.begin();
+  u8g2.clearDisplay();
+  u8g2.clearBuffer();
+  u8g2.sendBuffer();
   u8g2.enableUTF8Print();
   u8g2.clearDisplay();
   delay(100);  // Give display time to initialize
   u8g2.setPowerSave(0);
   u8g2.setContrast(255); // Maximum contrast
-  u8g2.clearBuffer();
-
-  // u8g2.drawXBMP(3, 2, 19, 16, image_wifi_full_bits);
-  // u8g2.drawXBMP(3, 2, 19, 16, image_wifi_full_bits);
-  // u8g2.drawXBMP(104, 1, 24, 16, image_battery_empty_bits);
-  // u8g2.setFont(u8g2_font_profont22_tr);
-  // int textWidth = u8g2.getStrWidth("TEST");
-  // int x = (127 - textWidth) / 2;
-  // u8g2.drawStr(x, 41, "TEST");
-
-  // Initial display update
-  updateDisplay(false, false, referee, getBatteryPercentage(), "", "Initializing...");
-
-  u8g2.sendBuffer();
   
   EEPROM.begin(EEPROM_SIZE);
   if (EEPROM.read(0) == 255) {
@@ -303,7 +308,7 @@ void setup() {
   setupBatteryPins();
   setupPins();
   
-  
+  // Show the referee selection display immediately (no other display calls before this)
   setRefNumber();
   
   xTaskCreatePinnedToCore(
@@ -323,18 +328,24 @@ void loop() {
   delay(10);
   if (!mqttClient.connected()) {
     mqttReconnect();
-    updateDisplay(WiFi.status() == WL_CONNECTED, false, referee, getBatteryPercentage(), currentDecision, "Server connection lost");
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, false, referee, getBatteryPercentage(), currentDecision, "Server connection lost", reminderMessage);
   }
   mqttClient.loop();
   buttonLoop();
-  //checkBatteryLevel();
+  
+  // Check if we need to clear the decision display after downSignal
+  if (downSignalReceived && (millis() - downSignalTime >= 3000)) {
+    currentDecision = "";
+    downSignalReceived = false;
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), "", warningMessage, reminderMessage);
+  }
 
   lowBatteryCheck();
   
   // Update display status periodically
   static unsigned long lastDisplayUpdate = 0;
   if (millis() - lastDisplayUpdate >= 1000) {
-    updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage);
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
     lastDisplayUpdate = millis();
   }
 }
