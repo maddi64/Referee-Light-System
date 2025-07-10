@@ -3,11 +3,12 @@ import os
 import subprocess
 import shutil
 
-BASE_DIR = os.getcwd()
-UPLOAD_FOLDER = os.path.join(BASE_DIR, 'owlcms')  # Save .deb here
-
 app = Flask(__name__)
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'owlcms')
+INSTALL_DIR = '/home/mwu/.local/share/owlcms'
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route('/')
 def index():
@@ -23,21 +24,18 @@ def upload():
     if not filename.endswith('.deb') or 'owlcms' not in filename:
         return "Invalid file. Please upload a .deb file containing 'owlcms' in the name.", 400
 
-    # Save uploaded file to owlcms folder
     save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(save_path)
 
     try:
-        # Step 1: Remove the existing OWLCMS package if installed
-        uninstall = subprocess.run(
-            ['sudo', 'dpkg', '-r', 'owlcms'],
-            capture_output=True,
-            text=True
-        )
-        print("Uninstall stdout:", uninstall.stdout)
-        print("Uninstall stderr:", uninstall.stderr)
+        # Step 1: Stop OWLCMS system service
+        subprocess.run(['sudo', 'systemctl', 'stop', 'owlcms'], check=True)
 
-        # Step 2: Install the new OWLCMS package
+        # Step 2: Delete current OWLCMS installation folder
+        if os.path.exists(INSTALL_DIR):
+            shutil.rmtree(INSTALL_DIR)
+
+        # Step 3: Install the new .deb file
         install = subprocess.run(
             ['sudo', 'dpkg', '-i', save_path],
             capture_output=True,
@@ -46,11 +44,13 @@ def upload():
         if install.returncode != 0:
             return f"Failed to install package:\n{install.stderr}", 500
 
-        # Step 3: Restart OWLCMS service (optional)
-        subprocess.run(['sudo', 'systemctl', 'restart', 'owlcms'], check=False)
+        # Step 4: Restart OWLCMS service
+        subprocess.run(['sudo', 'systemctl', 'start', 'owlcms'], check=True)
 
-        return "OWLCMS was successfully updated and restarted!"
+        return "OWLCMS successfully updated and restarted."
 
+    except subprocess.CalledProcessError as e:
+        return f"A system command failed:\n{e.stderr}", 500
     except Exception as e:
         return f"An unexpected error occurred: {str(e)}", 500
 
