@@ -1,13 +1,13 @@
-from flask import Flask, request, render_template, url_for
+from flask import Flask, request, render_template
 import os
-import subprocess
 import shutil
+import zipfile
 
-# Configuration
 app = Flask(__name__)
-BASE_DIR = os.getcwd()
-UPLOAD_FOLDER = os.path.join(BASE_DIR, 'owlcms')
-INSTALL_DIR = '/home/mwu/.local/share/owlcms'
+
+# Constants
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'owlcms')
+TARGET_DIR = '/home/mwu/.local/share/owlcms/58.3.2'
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -20,39 +20,32 @@ def index():
 def upload():
     file = request.files.get('file')
     if not file:
-        return "No file uploaded", 400
+        return "❌ No file uploaded", 400
 
     filename = file.filename.lower()
-    if not filename.endswith('.deb'):
-        return "Invalid file. Please upload a .deb file containing 'owlcms' in the name.", 400
+    if not filename.endswith('.zip'):
+        return "Invalid file. Please upload a .zip file.", 400
 
-    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(save_path)
+    zip_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(zip_path)
 
     try:
-        # Step 1: Stop OWLCMS service
-        stop = subprocess.run(['sudo', 'systemctl', 'stop', 'owlcms'], capture_output=True, text=True)
-        if stop.returncode != 0:
-            return f"Failed to stop OWLCMS:\nSTDOUT:\n{stop.stdout}\nSTDERR:\n{stop.stderr}", 500
+        # Step 1: Delete all folders and files inside the target directory
+        for item in os.listdir(TARGET_DIR):
+            item_path = os.path.join(TARGET_DIR, item)
+            if os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+            else:
+                os.remove(item_path)
 
-        # Step 2: Delete existing OWLCMS folder
-        if os.path.exists(INSTALL_DIR):
-            shutil.rmtree(INSTALL_DIR)
+        # Step 2: Extract uploaded zip into the target directory
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(TARGET_DIR)
 
-        # Step 3: Install new OWLCMS .deb package
-        install = subprocess.run(['sudo', 'dpkg', '-i', save_path], capture_output=True, text=True)
-        if install.returncode != 0:
-            return f"Failed to install package:\nSTDOUT:\n{install.stdout}\nSTDERR:\n{install.stderr}", 500
-
-        # Step 4: Start OWLCMS service
-        start = subprocess.run(['sudo', 'systemctl', 'start', 'owlcms'], capture_output=True, text=True)
-        if start.returncode != 0:
-            return f"Failed to start OWLCMS:\nSTDOUT:\n{start.stdout}\nSTDERR:\n{start.stderr}", 500
-
-        return "OWLCMS was successfully updated and restarted."
+        return "OWLCMS update successful. Files replaced."
 
     except Exception as e:
-        return f"An unexpected Python error occurred:\n{str(e)}", 500
+        return f"Error during update: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
