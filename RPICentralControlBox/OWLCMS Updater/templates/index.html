@@ -47,27 +47,22 @@
     p {
       font-size: 14px;
       color: #cccccc;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
     }
 
-    input[type="file"] {
-      display: none;
-    }
-
-    .custom-file-upload {
-      display: inline-block;
-      padding: 10px 20px;
-      color: #ffffff;
-      background-color: transparent;
-      border: 2px solid #f04e23;
-      border-radius: 8px;
+    .drop-zone {
+      border: 2px dashed #f04e23;
+      padding: 30px;
+      border-radius: 10px;
+      background-color: #1a1a1a;
+      color: #cccccc;
       cursor: pointer;
       margin-bottom: 20px;
       transition: background-color 0.3s ease;
     }
 
-    .custom-file-upload:hover {
-      background-color: #f04e23;
+    .drop-zone.dragover {
+      background-color: #2a2a2a;
     }
 
     .submit-button {
@@ -83,6 +78,12 @@
 
     .submit-button:hover {
       background-color: #d6401d;
+    }
+
+    #file-name {
+      color: #f04e23;
+      margin-bottom: 20px;
+      font-size: 14px;
     }
 
     #progress-container {
@@ -114,20 +115,24 @@
       color: #ff4444;
       font-size: 16px;
     }
+
+    input[type="file"] {
+      display: none;
+    }
   </style>
 </head>
 <body>
   <div class="card" id="upload-card">
     <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
     <h1>Update OWLCMS</h1>
-    <p>Please upload the latest <code>.zip</code> file to update your system.</p>
+    <p>Upload the latest <code>.zip</code> file by clicking or dragging it below.</p>
 
     <form id="upload-form">
-      <label class="custom-file-upload">
+      <div class="drop-zone" id="drop-zone">
+        Drop file here or click to browse
         <input type="file" name="file" id="file-input" accept=".zip" required>
-        Choose File
-      </label>
-      <div id="file-name" style="color:#f04e23; margin-bottom: 20px;"></div>
+      </div>
+      <div id="file-name"></div>
       <button class="submit-button" type="submit">Upload & Install</button>
     </form>
 
@@ -141,26 +146,53 @@
   </div>
 
   <script>
-    const form = document.getElementById('upload-form');
+    const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
+    const fileNameDiv = document.getElementById('file-name');
+    const form = document.getElementById('upload-form');
     const progressContainer = document.getElementById('progress-container');
     const progressBar = document.getElementById('progress-bar');
     const progressText = document.getElementById('progress-text');
     const resultMessage = document.getElementById('result-message');
     const errorMessage = document.getElementById('error-message');
-    const fileNameDiv = document.getElementById('file-name');
 
+    // Drag-and-drop behavior
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        fileInput.files = files;
+        fileNameDiv.innerText = files[0].name;
+      }
+    });
+
+    // Manual file selection
     fileInput.addEventListener('change', () => {
       fileNameDiv.innerText = fileInput.files[0] ? fileInput.files[0].name : '';
     });
 
+    // Form submission
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+
       errorMessage.textContent = '';
       resultMessage.textContent = '';
       progressBar.style.width = '0%';
       progressText.textContent = '0%';
       progressContainer.style.display = 'block';
+
+      if (!fileInput.files.length) {
+        errorMessage.textContent = 'No file selected.';
+        progressContainer.style.display = 'none';
+        return;
+      }
 
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
@@ -188,10 +220,14 @@
       };
 
       xhr.onerror = function () {
-        errorMessage.textContent = 'Upload failed. Please try again.';
+        errorMessage.textContent = 'Upload failed. Please check your connection.';
       };
 
-      xhr.send(formData);
+      try {
+        xhr.send(formData);
+      } catch (err) {
+        errorMessage.textContent = 'Error sending request: ' + err.message;
+      }
     });
   </script>
 </body>
