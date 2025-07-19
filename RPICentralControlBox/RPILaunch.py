@@ -2,6 +2,7 @@ import time
 import threading
 import subprocess
 import psutil
+import os
 from gpiozero import Button, LED
 from paho.mqtt.client import Client
 
@@ -44,6 +45,7 @@ reminder_timer = None
 down_signal_time = None
 decision_lock = threading.Lock()
 down_signal_triggered = False
+# dot_counter = 0
 
 
 # === Functions ===
@@ -79,14 +81,15 @@ def is_owlcms_running():
 
 # --- Function to draw the UI layout ---
 def draw_ui():
+    
     global mqtt_connected
     wifi_status = is_wifi_connected()
     mosquitto_status = is_mosquitto_running()
     owlcms_status = is_owlcms_running()
     current_mode = "standalone" if switch.is_pressed else "integrated"
+
     
     with canvas(device) as draw:
-        # WiFi status
         if wifi_status:
             draw.text((5, 5), 'WIFI:  OK', fill=255, font=font)
         else:
@@ -100,15 +103,15 @@ def draw_ui():
 
         # OWLCMS status
         if current_mode == "integrated" and owlcms_status:
-            draw.text((5, 45), "OWLCMS: OK", fill=255, font=font)
+            draw.text((5, 45), "OWLCMS:OK", fill=255, font=font)
         else:
             draw.text((5, 45), "OWLCMS:OFF", fill=255, font=font)
-
+    
 
 def oled_update_loop():
     while True:
         draw_ui()
-        time.sleep(5)
+        time.sleep(1)  # Update every 0.5 seconds for smoother animation
 
 
 def cancel_timer():
@@ -291,3 +294,5 @@ finally:
     if mqtt_connected:
         mqtt_client.loop_stop()
         mqtt_client.disconnect()
+    if os.path.exists("/tmp/system_ready"):
+        os.remove("/tmp/system_ready")
