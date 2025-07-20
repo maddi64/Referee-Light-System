@@ -13,7 +13,7 @@ from luma.core.render import canvas
 from PIL import Image, ImageFont
 
 # === Configuration ===
-SWITCH_PIN = 17
+SWITCH_PIN = 23
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 MQTT_DECISION_TOPIC = "owlcms/decision/A"
@@ -26,7 +26,7 @@ WIFI_LED_ON = LED(22)
 WIFI_LED_OFF = LED(27)
 MQTT_LED_ON = LED(24)
 MQTT_LED_OFF = LED(25)
-RESET_PIN = 23
+RESET_PIN = 17
 resetLiftBtn = Button(RESET_PIN)
 
 # === OLED Display Init ===
@@ -52,7 +52,7 @@ down_signal_triggered = False
 
 def is_wifi_connected():
     try:
-        subprocess.check_output(["ping", "-c", "1", "8.8.8.8"], timeout=2)
+        subprocess.check_output(["ping", "-c", "1", "192.168.68.60"], timeout=2)
         return True
     except Exception:
         return False
