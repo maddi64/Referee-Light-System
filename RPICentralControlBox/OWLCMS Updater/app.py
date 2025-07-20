@@ -86,6 +86,9 @@ cp -r "{temp_extract_dir}"/* "{UPDATER_DIR}/"
 # Make app.py executable if needed
 chmod +x "{UPDATER_DIR}/app.py"
 
+# Delete backup files after successful update
+rm -rf "{UPDATER_DIR}"_backup_*
+
 # Clean up temp directory
 rm -rf "{temp_extract_dir}"
 
