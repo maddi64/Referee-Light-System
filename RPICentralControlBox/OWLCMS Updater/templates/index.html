@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>OWLCMS Updater</title>
+  <title>RepLogic Updater</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
   <style>
     * {
       box-sizing: border-box;
@@ -119,13 +120,87 @@
     input[type="file"] {
       display: none;
     }
+
+    /* Custom Dropdown */
+    .dropdown {
+      position: relative;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .dropdown-toggle {
+      background-color: #1a1a1a;
+      border: 2px solid #f04e23;
+      border-radius: 8px;
+      color: #ffffff;
+      padding: 12px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      width: 100%;
+      text-align: center;
+      position: relative;
+    }
+
+    .dropdown-toggle::after {
+      content: '▼';
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #f04e23;
+      font-size: 12px;
+      pointer-events: none;
+    }
+
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      background-color: #1a1a1a;
+      border: 2px solid #f04e23;
+      border-radius: 8px;
+      margin-top: 4px;
+      width: 100%;
+      z-index: 999;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .dropdown.open .dropdown-menu {
+      display: block;
+    }
+
+    .dropdown-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #fff;
+      border-bottom: 1px solid #333;
+    }
+
+    .dropdown-item:hover {
+      background-color: #f04e23;
+      color: #1a1a1a;
+    }
+
+    .dropdown-item:last-child {
+      border-bottom: none;
+    }
   </style>
 </head>
 <body>
   <div class="card" id="upload-card">
     <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
     <h1>Update OWLCMS</h1>
-    <p>Upload the latest <code>.zip</code> file by clicking or dragging it below.</p>
+    <p>Select update type and upload the latest <code>.zip</code> file by clicking or dragging it below.</p>
+
+    <!-- Custom Dropdown -->
+    <div class="dropdown" id="customDropdown">
+      <div class="dropdown-toggle" id="dropdownToggle">Select update type</div>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <div class="dropdown-item" data-value="rlsx2">RLSX2 System (OWLCMS)</div>
+        <div class="dropdown-item" data-value="firmware-updater">Firmware Updater</div>
+      </div>
+    </div>
 
     <form id="upload-form">
       <div class="drop-zone" id="drop-zone">
@@ -146,6 +221,7 @@
   </div>
 
   <script>
+    // File upload logic
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const fileNameDiv = document.getElementById('file-name');
@@ -156,7 +232,6 @@
     const resultMessage = document.getElementById('result-message');
     const errorMessage = document.getElementById('error-message');
 
-    // Drag-and-drop behavior
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', e => {
       e.preventDefault();
@@ -173,12 +248,36 @@
       }
     });
 
-    // Manual file selection
     fileInput.addEventListener('change', () => {
       fileNameDiv.innerText = fileInput.files[0] ? fileInput.files[0].name : '';
     });
 
-    // Form submission
+    // Custom dropdown logic
+    const dropdown = document.getElementById('customDropdown');
+    const toggle = document.getElementById('dropdownToggle');
+    const menu = document.getElementById('dropdownMenu');
+    const items = document.querySelectorAll('.dropdown-item');
+    let selectedValue = '';
+
+    toggle.addEventListener('click', () => {
+      dropdown.classList.toggle('open');
+    });
+
+    items.forEach(item => {
+      item.addEventListener('click', () => {
+        selectedValue = item.dataset.value;
+        toggle.textContent = item.textContent;
+        dropdown.classList.remove('open');
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    // Form submit with dropdown value
     form.addEventListener('submit', function (e) {
       e.preventDefault();
 
@@ -194,8 +293,15 @@
         return;
       }
 
+      if (!selectedValue) {
+        errorMessage.textContent = 'Please select an update type.';
+        progressContainer.style.display = 'none';
+        return;
+      }
+
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
+      formData.append('update_type', selectedValue);
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/upload', true);
