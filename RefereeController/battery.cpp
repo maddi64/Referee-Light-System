@@ -21,7 +21,7 @@
 #define ADC_SAMPLES 10
 
 float lowestVoltage = VOLTAGE_100;
-float calibrationFactor = 1.08;
+float calibrationFactor = 1.1;
 
 
 float readRawVoltage() {
@@ -30,8 +30,19 @@ float readRawVoltage() {
     adcSum += analogRead(BATTERY_ADC_PIN);
     delay(5);
   }
+
   int adcValue = adcSum / ADC_SAMPLES;
-  float rawVoltage = (adcValue / ADC_RESOLUTION) * REFERENCE_VOLTAGE * VOLTAGE_DIVIDER_RATIO;
+  // Serial.print("ADC VALUE: ");
+  // Serial.println(adcValue);
+
+  float vadc = (adcValue / ADC_RESOLUTION) * REFERENCE_VOLTAGE;
+  // Serial.print("VADC: ");
+  // Serial.println(vadc);
+
+  float rawVoltage = vadc * VOLTAGE_DIVIDER_RATIO;
+  // Serial.print("RAW VOLTAGE IS: ");
+  // Serial.println(rawVoltage);
+
   return rawVoltage;
 }
 

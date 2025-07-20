@@ -1,5 +1,6 @@
 // ====== START CONFIG SECTION ======================================================
 #include <Arduino.h>
+#include <esp_system.h>
 #include <EEPROM.h>
 #include <U8g2lib.h>
 #include <Wire.h>
@@ -8,7 +9,7 @@
 #include "battery.h"
 #include "interface.h"
 
-#define EEPROM_SIZE 1
+#define EEPROM_SIZE 2  // Increased to 2: byte 0 for referee, byte 1 for restart flag
 
 //______Allocate Pins___________________________________________
 int decisionPins[] = {14, 27};
@@ -21,10 +22,10 @@ int hapticPins[] = {4, 18};
 
 #define SDA_PIN 17
 #define SCL_PIN 5
+#define DISPLAY_POWER_PIN 19  // Control display power/ground - Not used
 
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(
   U8G2_R0,         // Rotation
-  /* reset=*/ U8X8_PIN_NONE, 
   /* clock=*/ SCL_PIN, 
   /* data=*/ SDA_PIN
 );
@@ -76,15 +77,40 @@ void updateDisplayWithPriority(bool wifi_status, bool mqtt_status, int referee, 
 
 void setRefNumber() {
   Serial.println("Set Ref Mode Initiated");
-  warningMessage = "SELECT REFEREE NUMBER";
+  
+  // Power up the display properly - DISPLAY_POWER_PIN not used
+  digitalWrite(DISPLAY_POWER_PIN, LOW);  // Connect to ground
+  delay(500);  // Wait for display to stabilize
+  
+  // Re-initialize I2C and display after power up
+  Wire.begin(SDA_PIN, SCL_PIN);
+  //delay(50);
+  u8g2.begin();
+  u8g2.clearBuffer();
+  u8g2.sendBuffer();
+  delay(200);
+  u8g2.clearBuffer();
+  // u8g2.setDrawColor(0); // Set color to black
+  // u8g2.drawBox(0, 0, u8g2.getDisplayWidth(), u8g2.getDisplayHeight());
+  u8g2.sendBuffer();
+  
+  
+  
+  // Load referee from EEPROM and display immediately
+  // EEPROM already initialized in setup(), no need to call begin() again
+  if (EEPROM.read(0) == 255) {
+    referee = 1;
+  } else {
+    referee = EEPROM.read(0);
+  }
+  
+  // Show the current referee number from EEPROM immediately
+  refSelectionDispay(referee, 15);
+  
   unsigned long startTime = millis();
   const unsigned long timeout = 15000; 
   unsigned long lastUpdateTime = 0;
   int lastSecondsRemaining = 15;
-
-  refSelectionDispay(referee, lastSecondsRemaining);
-  
-  
   
   while (!refSet) {
     bool buttonA = digitalRead(decisionPins[0]) == LOW;
@@ -101,7 +127,6 @@ void setRefNumber() {
       EEPROM.write(0, referee);
       EEPROM.commit();
       refSet = true;
-      warningMessage = "";
       refSelectionDispay(referee, 0);
       return;
     }
@@ -119,7 +144,6 @@ void setRefNumber() {
       EEPROM.write(0, referee);
       EEPROM.commit();
       refSet = true;
-      warningMessage = "";
       refSelectionDispay(referee, secondsRemaining);
       return;
     }
@@ -286,30 +310,43 @@ void lowBatteryCheck() {
 void setup() {
   Serial.begin(115200);
   
-  // Initialize OLED display
-  Wire.begin(SDA_PIN, SCL_PIN);
-  u8g2.begin();
-  u8g2.clearDisplay();
-  u8g2.clearBuffer();
-  u8g2.sendBuffer();
-  u8g2.enableUTF8Print();
-  u8g2.clearDisplay();
-  delay(100);  // Give display time to initialize
-  u8g2.setPowerSave(0);
-  u8g2.setContrast(255); // Maximum contrast
-  
+  // ESP32 restart on boot for clean initialization (using EEPROM to track)
   EEPROM.begin(EEPROM_SIZE);
-  if (EEPROM.read(0) == 255) {
-    referee = 1;
-  } else {
-    referee = EEPROM.read(0);
+  
+  // Check if this is the first boot after power-on
+  // We use EEPROM address 1 for restart flag (address 0 is used for referee number)
+  if (EEPROM.read(1) != 0xAA) {
+    // First boot detected, set flag and restart
+    EEPROM.write(1, 0xAA);
+    EEPROM.commit();
+    //Serial.println("Performing ESP32 restart for clean boot...");
+    //delay(100);
+    esp_restart();
   }
+  
+  // Clear the restart flag so next power cycle will trigger restart again
+  EEPROM.write(1, 0x00);
+  EEPROM.commit();
+  
+  // Configure power control pin and keep display off initially - DISPLAY_POWER_PIN not used
+  pinMode(DISPLAY_POWER_PIN, OUTPUT);
+  digitalWrite(DISPLAY_POWER_PIN, HIGH);   // Disconnect ground (display off)
+  delay(100);  // Ensure display is fully powered down
+  
+  // Don't initialize display here - it will be done in setRefNumber()
   
   setupBatteryPins();
   setupPins();
   
-  // Show the referee selection display immediately (no other display calls before this)
+  // This will power up the display and show selection
   setRefNumber();
+  
+  // EEPROM was already initialized above for restart logic
+  // No need to call EEPROM.begin() again in setRefNumber()
+  
+  // Now that display is powered and initialized, set up the rest
+  u8g2.enableUTF8Print();
+  u8g2.setContrast(255);
   
   xTaskCreatePinnedToCore(
     batteryMonitoringTask,
