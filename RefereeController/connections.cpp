@@ -5,7 +5,6 @@
 
 const char* wifiSSID = "RLSX2-WACT0725";
 const char* wifiPassword = "RepLogicWACT!";
-
 const char* mqttServer = "192.168.68.60";
 const char* mqttUserName= "";
 const char* mqttPassword = "";
@@ -50,7 +49,7 @@ void wifiConnect() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifiSSID, wifiPassword);
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    delay(1000);
     Serial.print(".");
     updateDisplay(false, false, referee, getBatteryPercentage(), "", "WiFi connection lost");
   }
@@ -84,7 +83,7 @@ void mqttReconnect() {
       mqttClient.subscribe(summonTopic);
 
       char resetTopic[50];
-      sprintf(resetTopic, "owlcms/reset/");
+      sprintf(resetTopic, "owlcms/fop/resetDecisions/#", fop);
       mqttClient.subscribe(resetTopic);
 
       char downSignalTopic[50];
@@ -96,7 +95,7 @@ void mqttReconnect() {
       Serial.print("MQTT connection failed, rc=");
       Serial.print(mqttClient.state());
       Serial.println(" try again in 5 second");
-      delay(5000);
+      delay(1000);
     }
   }
 }

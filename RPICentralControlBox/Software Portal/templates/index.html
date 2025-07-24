@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RepLogic Updater</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #131212;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .card {
+      background-color: #1a1a1a;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      padding: 40px;
+      width: 420px;
+      text-align: center;
+      transition: transform 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+    }
+
+    .logo {
+      width: 80px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 26px;
+      color: #ffffff;
+      margin-bottom: 10px;
+    }
+
+    p {
+      font-size: 14px;
+      color: #cccccc;
+      margin-bottom: 20px;
+    }
+
+    .drop-zone {
+      border: 2px dashed #f04e23;
+      padding: 30px;
+      border-radius: 10px;
+      background-color: #1a1a1a;
+      color: #cccccc;
+      cursor: pointer;
+      margin-bottom: 20px;
+      transition: background-color 0.3s ease;
+    }
+
+    .drop-zone.dragover {
+      background-color: #2a2a2a;
+    }
+
+    .submit-button {
+      background-color: #f04e23;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .submit-button:hover {
+      background-color: #d6401d;
+    }
+
+    .download-button {
+      background-color: #f04e23;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      margin-bottom: 20px;
+      width: 100%;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .download-button:hover {
+      background-color: #d6401d;
+    }
+
+    #file-name {
+      color: #f04e23;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    #progress-container {
+      display: none;
+      margin-top: 20px;
+    }
+
+    #progress-bar {
+      height: 20px;
+      background-color: #f04e23;
+      width: 0%;
+      border-radius: 10px;
+    }
+
+    #progress-text {
+      color: #ccc;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    #result-message {
+      margin-top: 20px;
+      color: #00ff99;
+      font-size: 16px;
+    }
+
+    #error-message {
+      margin-top: 20px;
+      color: #ff4444;
+      font-size: 16px;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    /* Custom Dropdown */
+    .dropdown {
+      position: relative;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .dropdown-toggle {
+      background-color: #1a1a1a;
+      border: 2px solid #f04e23;
+      border-radius: 8px;
+      color: #ffffff;
+      padding: 12px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      width: 100%;
+      text-align: center;
+      position: relative;
+    }
+
+    .dropdown-toggle::after {
+      content: '▼';
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #f04e23;
+      font-size: 12px;
+      pointer-events: none;
+    }
+
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      background-color: #1a1a1a;
+      border: 2px solid #f04e23;
+      border-radius: 8px;
+      margin-top: 4px;
+      width: 100%;
+      z-index: 999;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .dropdown.open .dropdown-menu {
+      display: block;
+    }
+
+    .dropdown-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #fff;
+      border-bottom: 1px solid #333;
+    }
+
+    .dropdown-item:hover {
+      background-color: #f04e23;
+      color: #1a1a1a;
+    }
+
+    .dropdown-item:last-child {
+      border-bottom: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="upload-card">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
+    <h1>Update OWLCMS</h1>
+    <p>Select update type and upload the latest <code>.zip</code> file by clicking or dragging it below.</p>
+
+    <!-- Download Button -->
+    <button class="download-button" onclick="downloadBackup()">Download Current Files</button>
+
+    <!-- Custom Dropdown -->
+    <div class="dropdown" id="customDropdown">
+      <div class="dropdown-toggle" id="dropdownToggle">Select update type</div>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <div class="dropdown-item" data-value="rlsx2">RLSX2 System (OWLCMS)</div>
+        <div class="dropdown-item" data-value="firmware-updater">Firmware Updater</div>
+      </div>
+    </div>
+
+    <form id="upload-form">
+      <div class="drop-zone" id="drop-zone">
+        Drop file here or click to browse
+        <input type="file" name="file" id="file-input" accept=".zip" required>
+      </div>
+      <div id="file-name"></div>
+      <button class="submit-button" type="submit">Upload & Install</button>
+    </form>
+
+    <div id="progress-container">
+      <div id="progress-bar"></div>
+      <div id="progress-text">0%</div>
+    </div>
+
+    <div id="result-message"></div>
+    <div id="error-message"></div>
+  </div>
+
+  <script>
+    // File upload logic
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileNameDiv = document.getElementById('file-name');
+    const form = document.getElementById('upload-form');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const resultMessage = document.getElementById('result-message');
+    const errorMessage = document.getElementById('error-message');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        fileInput.files = files;
+        fileNameDiv.innerText = files[0].name;
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      fileNameDiv.innerText = fileInput.files[0] ? fileInput.files[0].name : '';
+    });
+
+    // Custom dropdown logic
+    const dropdown = document.getElementById('customDropdown');
+    const toggle = document.getElementById('dropdownToggle');
+    const menu = document.getElementById('dropdownMenu');
+    const items = document.querySelectorAll('.dropdown-item');
+    let selectedValue = '';
+
+    toggle.addEventListener('click', () => {
+      dropdown.classList.toggle('open');
+    });
+
+    items.forEach(item => {
+      item.addEventListener('click', () => {
+        selectedValue = item.dataset.value;
+        toggle.textContent = item.textContent;
+        dropdown.classList.remove('open');
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    // Form submit with dropdown value
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      errorMessage.textContent = '';
+      resultMessage.textContent = '';
+      progressBar.style.width = '0%';
+      progressText.textContent = '0%';
+      progressContainer.style.display = 'block';
+
+      if (!fileInput.files.length) {
+        errorMessage.textContent = 'No file selected.';
+        progressContainer.style.display = 'none';
+        return;
+      }
+
+      if (!selectedValue) {
+        errorMessage.textContent = 'Please select an update type.';
+        progressContainer.style.display = 'none';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      formData.append('update_type', selectedValue);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload', true);
+
+      xhr.upload.onprogress = function (event) {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          progressBar.style.width = percent + '%';
+          progressText.textContent = percent + '%';
+        }
+      };
+
+      xhr.onload = function () {
+        if (xhr.status === 200) {
+          resultMessage.textContent = 'Update successful!';
+          form.reset();
+          fileNameDiv.innerText = '';
+          progressText.textContent = 'Upload complete';
+        } else {
+          errorMessage.textContent = 'Error: ' + xhr.responseText;
+        }
+      };
+
+      xhr.onerror = function () {
+        errorMessage.textContent = 'Upload failed. Please check your connection.';
+      };
+
+      try {
+        xhr.send(formData);
+      } catch (err) {
+        errorMessage.textContent = 'Error sending request: ' + err.message;
+      }
+    });
+
+    // Download backup function
+    function downloadBackup() {
+      resultMessage.textContent = 'Preparing download...';
+      errorMessage.textContent = '';
+      
+      window.location.href = '/download';
+      
+      // Clear message after a short delay
+      setTimeout(() => {
+        resultMessage.textContent = '';
+      }, 2000);
+    }
+  </script>
+</body>
+</html>

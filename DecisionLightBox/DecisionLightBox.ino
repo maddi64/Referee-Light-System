@@ -2,6 +2,7 @@
 #include "secrets_local.h"
 #include <driver/ledc.h>
 #include <Arduino.h>
+#include <Ticker.h>
 
 const char* platform = "A";
 char fop[20];
@@ -9,6 +10,7 @@ char fop[20];
 String downSignalTopic;
 String decisionTopic;
 String resetDecisionsTopic;
+String timeRemainingTopic;
 
 String ref1Decision = "";
 String ref2Decision = "";
@@ -17,6 +19,8 @@ String ref3Decision = "";
 bool downTriggered = false;
 bool allDecisionsMade = false;
 bool silentMode = false; 
+
+Ticker buzzerTimer;
 
 // Variables for non-blocking timing of down signal
 unsigned long downSignalStartTime = 0;
@@ -87,6 +91,7 @@ void setup() {
   downSignalTopic = "owlcms/fop/down/" + String(fop);
   decisionTopic = "owlcms/decision/" + String(fop);
   resetDecisionsTopic = "owlcms/fop/resetDecisions/" + String(fop);
+  timeRemainingTopic = "owlcms/fop/timeRemaining/" + String(fop);
   mqttReconnect();
   digitalWrite(downLedPin, LOW);
 }
@@ -157,6 +162,7 @@ void mqttReconnect() {
       mqttClient.subscribe(downSignalTopic.c_str());
       mqttClient.subscribe(decisionTopic.c_str());
       mqttClient.subscribe(resetDecisionsTopic.c_str());
+      mqttClient.subscribe(timeRemainingTopic.c_str());
     } else {
       Serial.print("MQTT connection failed, rc=");
       Serial.print(mqttClient.state());
@@ -243,6 +249,10 @@ void callback(char* topic, byte* message, unsigned int length) {
   if (stTopic.startsWith(downSignalTopic)) {
     Serial.println(stTopic + stMessage);
     downSignal();
+  }
+
+  if (stTopic.startsWith(timeRemainingTopic)) {
+    timeRemainingBuzzer(stMessage);
   }
 }
 
@@ -346,4 +356,24 @@ void resetDecisions() {
   ref3Decision = "";
   downTriggered = false;
   Serial.println(ref1Decision + ref2Decision + ref3Decision);
+}
+
+void turnOffBuzzer() {
+  digitalWrite(buzzerPin, LOW);
+  digitalWrite(downLedPin, LOW);
+}
+
+void timeRemainingBuzzer(String message) {
+  String timeRemaining = message;
+
+  if (message == "90" || message == "30") {
+    digitalWrite(buzzerPin, HIGH);
+    buzzerTimer.once(0.5, turnOffBuzzer); 
+  }
+
+  if (message == "0") {
+    digitalWrite(buzzerPin, HIGH);
+    digitalWrite(downLedPin, HIGH);
+    buzzerTimer.once(1.5, turnOffBuzzer);
+  }
 }

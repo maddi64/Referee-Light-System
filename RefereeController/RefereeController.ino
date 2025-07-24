@@ -9,7 +9,7 @@
 #include "battery.h"
 #include "interface.h"
 
-#define EEPROM_SIZE 2  // Increased to 2: byte 0 for referee, byte 1 for restart flag
+#define EEPROM_SIZE 8  // Increased to 8: byte 0 for referee, byte 1 for restart flag, bytes 2-5 for lowest voltage
 
 //______Allocate Pins___________________________________________
 int decisionPins[] = {14, 27};
@@ -218,13 +218,15 @@ void changeReminderStatus(int ref13Number, boolean warn) {
 
 void changeSummonStatus(int ref02Number, boolean warn) {
   if (warn) {
-    reminderMessage = "SUMMONED BY JURY";
+    currentDecision = "SUMMONED";
+    reminderMessage = "Please see the Jury";
     digitalWrite(hapticPins[0], HIGH);
     digitalWrite(hapticPins[1], HIGH);
     updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
     
     // Start timer to clear summon after 10 seconds
     delay(10000);
+    currentDecision = "";
     reminderMessage = "";
     digitalWrite(hapticPins[0], LOW);
     digitalWrite(hapticPins[1], LOW);
@@ -255,7 +257,7 @@ void updateDisplayWithPriority(bool wifi_status, bool mqtt_status, int referee, 
 String decisionRequestTopic = String("owlcms/decisionRequest/") + fop;
 String summonTopic = String("owlcms/summon/") + fop;
 String ledTopic = String("owlcms/led/") + fop;
-String resetTopic = String("owlcms/reset/");
+String resetTopic = String("owlcms/fop/resetDecisions/" + String(fop));
 String downSignalTopic = String("owlcms/fop/down/" + String(fop));
 
 void callback(char* topic, byte* message, unsigned int length) {
@@ -298,7 +300,7 @@ void noWarning() {
 void lowBatteryCheck() {
   //updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), "", "BATTERY LOW. PLEASE CHARGE.");
   if (lowBattery == true) {
-    warningMessage = "BATTERY LOW. PLEASE CHARGE.";
+    warningMessage = "LOW BATTERY. CHARGE NOW";
   } else {
     warningMessage = "";
   }
@@ -337,6 +339,9 @@ void setup() {
   
   setupBatteryPins();
   setupPins();
+  
+  // Initialize battery EEPROM data
+  initializeBatteryEEPROM();
   
   // This will power up the display and show selection
   setRefNumber();

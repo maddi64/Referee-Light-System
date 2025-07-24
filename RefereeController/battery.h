@@ -4,6 +4,7 @@
 
 extern String warningMessage;
 extern bool lowBattery; 
+void initializeBatteryEEPROM();
 void batteryMonitoringTask(void *parameter);
 void setupBatteryPins();
 int getBatteryPercentage();
