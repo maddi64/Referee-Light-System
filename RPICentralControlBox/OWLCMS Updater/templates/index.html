@@ -81,6 +81,24 @@
       background-color: #d6401d;
     }
 
+    .download-button {
+      background-color: #f04e23;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      margin-bottom: 20px;
+      width: 100%;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .download-button:hover {
+      background-color: #d6401d;
+    }
+
     #file-name {
       color: #f04e23;
       margin-bottom: 20px;
@@ -190,8 +208,11 @@
 <body>
   <div class="card" id="upload-card">
     <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
-    <h1>Update OWLCMS</h1>
+    <h1>RLSX2 Software Portal</h1>
     <p>Select update type and upload the latest <code>.zip</code> file by clicking or dragging it below.</p>
+
+    <!-- Download Button -->
+    <button class="download-button" onclick="downloadBackup()">Download Current Files</button>
 
     <!-- Custom Dropdown -->
     <div class="dropdown" id="customDropdown">
@@ -335,6 +356,19 @@
         errorMessage.textContent = 'Error sending request: ' + err.message;
       }
     });
+
+    // Download backup function
+    function downloadBackup() {
+      resultMessage.textContent = 'Preparing download...';
+      errorMessage.textContent = '';
+      
+      window.location.href = '/download';
+      
+      // Clear message after a short delay
+      setTimeout(() => {
+        resultMessage.textContent = '';
+      }, 2000);
+    }
   </script>
 </body>
 </html>
