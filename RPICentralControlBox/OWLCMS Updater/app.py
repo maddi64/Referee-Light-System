@@ -20,6 +20,33 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def index():
     return render_template('index.html')
 
+@app.route('/download')
+def download():
+    try:
+        # Create a temporary zip file
+        zip_filename = 'owlcms_backup.zip'
+        zip_path = os.path.join('/tmp', zip_filename)
+        
+        # Remove existing zip if it exists
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        
+        # Create zip file with all contents from TARGET_DIR
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(TARGET_DIR):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    # Calculate relative path from TARGET_DIR
+                    arcname = os.path.relpath(file_path, TARGET_DIR)
+                    zipf.write(file_path, arcname)
+        
+        # Send the file for download
+        from flask import send_file
+        return send_file(zip_path, as_attachment=True, download_name=zip_filename, mimetype='application/zip')
+        
+    except Exception as e:
+        return f"❌ Error creating backup: {str(e)}", 500
+
 @app.route('/upload', methods=['POST'])
 def upload():
     file = request.files.get('file')
@@ -53,6 +80,30 @@ def upload():
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(TARGET_DIR)
 
+            # Step 3: Set proper permissions for Python files and executables
+            for root, dirs, files in os.walk(TARGET_DIR):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if file.endswith('.py'):
+                        # Make Python files executable
+                        os.chmod(file_path, 0o755)
+                    elif file.endswith(('.sh', '.bin')) or 'launch' in file.lower():
+                        # Make shell scripts and launch files executable
+                        os.chmod(file_path, 0o755)
+                    else:
+                        # Set read/write permissions for other files
+                        os.chmod(file_path, 0o644)
+                
+                # Set directory permissions
+                for dir_name in dirs:
+                    dir_path = os.path.join(root, dir_name)
+                    os.chmod(dir_path, 0o755)
+            
+            # Reboot system to ensure all services restart with new files
+            subprocess.Popen(['sudo', 'reboot'], 
+                           stdout=subprocess.DEVNULL, 
+                           stderr=subprocess.DEVNULL)
+            
             return "✅ RLSX2 System (OWLCMS) update successful. Files replaced."
             
         elif update_type == 'firmware-updater':
