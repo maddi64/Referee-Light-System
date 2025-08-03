@@ -1,11 +1,12 @@
 #include "connections.h"
 
-// const char* wifiSSID = "Wu";
+// const char* wifiSSID = "WAP";
 // const char* wifiPassword = "Welcome98!";
 
-const char* wifiSSID = "RLSX2-WACT0725";
-const char* wifiPassword = "RepLogicWACT!";
-const char* mqttServer = "192.168.68.60";
+const char* wifiSSID = "RLSX2-NSWWA001";
+const char* wifiPassword = "RepLogicNSWWA!";
+// const char* mqttServer = "192.168.68.1";
+const char* mqttServer = "192.168.68.1";
 const char* mqttUserName= "";
 const char* mqttPassword = "";
 
@@ -89,6 +90,22 @@ void mqttReconnect() {
       char downSignalTopic[50];
       sprintf(downSignalTopic, "owlcms/fop/down/#", fop);
       mqttClient.subscribe(downSignalTopic);
+
+      char breakTopic[50];
+      sprintf(breakTopic, "owlcms/fop/break/#", fop);
+      mqttClient.subscribe(breakTopic);
+
+      char juryDeliberationTopic[50];
+      sprintf(juryDeliberationTopic, "owlcms/fop/juryDeliberation/#", fop);
+      mqttClient.subscribe(juryDeliberationTopic);
+
+      char juryChallengeTopic[50];
+      sprintf(juryChallengeTopic, "owlcms/fop/challenge/#", fop);
+      mqttClient.subscribe(juryChallengeTopic);
+
+      char endBreakTopic[50];
+      sprintf(endBreakTopic, "owlcms/fop/startLifting/#", fop);
+      mqttClient.subscribe(endBreakTopic);
 
       updateDisplay(true, true, referee, getBatteryPercentage(), "", "");
     } else {

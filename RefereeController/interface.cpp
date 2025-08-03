@@ -69,8 +69,10 @@ void drawWarningMessage(const String& message) {
 }
 
 void drawMainText(const String& text) {
-  if (text == "MAKE DECISION") {
+  if (text == "MAKE DECISION" || text == "DELIBERATION" || text == "SESSION DONE" || text == "MARSHAL BREAK" ) {
     u8g2.setFont(u8g2_font_profont17_tr);
+  } else if (text == "TECHNICAL BREAK") {
+    u8g2.setFont(u8g2_font_profont15_tr);
   } else {
     u8g2.setFont(u8g2_font_profont22_tr);
   }

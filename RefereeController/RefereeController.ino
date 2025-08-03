@@ -63,6 +63,8 @@ bool previousBatteryState = true;
 unsigned long downSignalTime = 0;
 bool downSignalReceived = false;
 
+bool inBreak = false;
+
 // ====== Function Prototypes ======================================================
 void setRefNumber();
 void setupPins();
@@ -70,6 +72,7 @@ void buttonLoop();
 void sendDecision(int ref02Number, const char* decision);
 void changeReminderStatus(int ref13Number, boolean warn);
 void changeSummonStatus(int ref02Number, boolean warn);
+void assignBreak(String stMessage);
 void callback(char* topic, byte* message, unsigned int length);
 void updateDisplayWithPriority(bool wifi_status, bool mqtt_status, int referee, int battery_percent, const String& mainText, const String& warning, const String& reminder);
 
@@ -163,23 +166,25 @@ void buttonLoop() {
     int state = digitalRead(decisionPins[j]);
     int prevState = prevDecisionPinState[j];
     if (state != prevState) {
-      prevDecisionPinState[j] = state;
-      if (state == LOW) {
-        if (j % 2 == 0) {
-          sendDecision(j / 2, "good");
-          currentDecision = "GOOD LIFT";
-        } else {
-          sendDecision(j / 2, "bad");
-          currentDecision = "BAD LIFT";
+      if (inBreak == false) {
+        prevDecisionPinState[j] = state;
+        if (state == LOW) {
+          if (j % 2 == 0) {
+            sendDecision(j / 2, "good");
+            currentDecision = "GOOD LIFT";
+          } else {
+            sendDecision(j / 2, "bad");
+            currentDecision = "BAD LIFT";
+          }
+          
+          // Clear reminder message when a decision is made
+          reminderMessage = "";
+          
+          updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
+          digitalWrite(hapticPins[0], LOW);
+          digitalWrite(hapticPins[1], LOW);
+          return;
         }
-        
-        // Clear reminder message when a decision is made
-        reminderMessage = "";
-        
-        updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
-        digitalWrite(hapticPins[0], LOW);
-        digitalWrite(hapticPins[1], LOW);
-        return;
       }
     }
   }
@@ -217,22 +222,50 @@ void changeReminderStatus(int ref13Number, boolean warn) {
 }
 
 void changeSummonStatus(int ref02Number, boolean warn) {
-  if (warn) {
-    currentDecision = "SUMMONED";
-    reminderMessage = "Please see the Jury";
-    digitalWrite(hapticPins[0], HIGH);
-    digitalWrite(hapticPins[1], HIGH);
-    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
-    
-    // Start timer to clear summon after 10 seconds
-    delay(10000);
-    currentDecision = "";
-    reminderMessage = "";
-    digitalWrite(hapticPins[0], LOW);
-    digitalWrite(hapticPins[1], LOW);
-    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
+  if (ref02Number == referee || ref02Number == 0) {
+    if (warn) {
+      currentDecision = "SUMMONED";
+      reminderMessage = "Please see the Jury";
+      digitalWrite(hapticPins[0], HIGH);
+      digitalWrite(hapticPins[1], HIGH);
+      updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
+      
+      // Start timer to clear summon after 10 seconds
+      delay(5000);
+      currentDecision = "";
+      reminderMessage = "";
+      digitalWrite(hapticPins[0], LOW);
+      digitalWrite(hapticPins[1], LOW);
+      updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
+    }
   }
 }
+
+
+void assignBreak(String stMessage) {
+  inBreak = true;
+  if(stMessage == "BEFORE_INTRODUCTION") {
+    warningMessage = "Break before introduction";
+    currentDecision = "BREAK";
+  } else if (stMessage == "FIRST_SNATCH") {
+    warningMessage = "Break before snatch";
+    currentDecision = "BREAK";
+  } else if (stMessage == "FIRST_CJ") {
+    warningMessage = "Break before CJ";
+    currentDecision = "BREAK";
+  } else if (stMessage == "GROUP_DONE") {
+    currentDecision = "SESSION DONE";
+  } else if (stMessage == "TECHNICAL") {
+    currentDecision = "TECHNICAL BREAK";
+  } else if (stMessage == "MARSHAL") {
+    currentDecision = "MARSHAL BREAK";
+  } else if (stMessage == "CEREMONY") {
+    currentDecision = "CEREMONY";
+  }
+
+  updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
+}
+
 
 void setupPins() {
   for (int j = 0; j < ELEMENTCOUNT(decisionPins); j++) {
@@ -259,6 +292,10 @@ String summonTopic = String("owlcms/summon/") + fop;
 String ledTopic = String("owlcms/led/") + fop;
 String resetTopic = String("owlcms/fop/resetDecisions/" + String(fop));
 String downSignalTopic = String("owlcms/fop/down/" + String(fop));
+String breakTopic = String("owlcms/fop/break/") + fop;
+String juryDeliberationTopic = String("owlcms/fop/juryDeliberation/") + fop;
+String juryChallengeTopic = String("owlcms/fop/challenge/") + fop;
+String endBreakTopic = String("owlcms/fop/startLifting/") + fop;
 
 void callback(char* topic, byte* message, unsigned int length) {
   String stTopic = String(topic);
@@ -279,7 +316,7 @@ void callback(char* topic, byte* message, unsigned int length) {
     if (ref13Number == 0) {
       changeSummonStatus(0, stMessage.startsWith("on"));
     } else {
-      changeSummonStatus(ref13Number - 1, stMessage.startsWith("on"));
+      changeSummonStatus(ref13Number, stMessage.startsWith("on"));
     }
   } else if (stTopic.startsWith(resetTopic)) {
     currentDecision = "";
@@ -289,6 +326,25 @@ void callback(char* topic, byte* message, unsigned int length) {
     // Start 3-second timer to clear decision display
     downSignalTime = millis();
     downSignalReceived = true;
+  } else if (stTopic.startsWith(breakTopic)) {
+    Serial.println(stMessage);
+    assignBreak(stMessage);
+  } else if (stTopic.startsWith(juryDeliberationTopic)) {
+    Serial.println(stMessage);
+    inBreak = true; 
+    currentDecision = "DELIBERATION";
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
+  } else if (stTopic.startsWith(juryChallengeTopic)) {
+    Serial.println(stMessage);
+    inBreak = true; 
+    currentDecision = "CHALLENGE";
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
+  } else if (stTopic.startsWith(endBreakTopic)) {
+    Serial.println(stMessage);
+    currentDecision = "";
+    warningMessage = "";
+    inBreak = false; 
+    updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), currentDecision, warningMessage, reminderMessage);
   }
 }
 
