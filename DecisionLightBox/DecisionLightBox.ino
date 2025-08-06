@@ -20,6 +20,8 @@ bool downTriggered = false;
 bool allDecisionsMade = false;
 bool silentMode = false; 
 
+int retryCounter = 0;
+
 Ticker buzzerTimer;
 
 // Variables for non-blocking timing of down signal
@@ -143,7 +145,12 @@ void wifiConnect() {
     disconnectLEDs();
     delay(500);
     Serial.print(".");
+    retryCounter++;
+    if (retryCounter == 3) {
+      ESP.restart();
+    }
   }
+  retryCounter = 0;
   Serial.println(" connected");
 }
 

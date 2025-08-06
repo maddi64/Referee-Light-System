@@ -22,7 +22,7 @@
 #define ADC_SAMPLES 10
 
 float baselineVoltage = 4.0;  // Default baseline voltage
-float calibrationFactor = 1.08;
+float calibrationFactor = 1.03;
 
 // Charging state variables
 static float highestChargingVoltage = 0.0;
