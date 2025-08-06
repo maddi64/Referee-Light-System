@@ -22,7 +22,7 @@
 #define ADC_SAMPLES 10
 
 float baselineVoltage = 4.0;  // Default baseline voltage
-float calibrationFactor = 1.1;
+float calibrationFactor = 1.08;
 
 // Charging state variables
 static float highestChargingVoltage = 0.0;
@@ -93,6 +93,7 @@ void initializeBatteryEEPROM() {
 
 float getBatteryVoltage() {
   float rawVoltage = readRawVoltage();
+  //Serial.println(rawVoltage);
   float calibratedVoltage = rawVoltage * calibrationFactor;
   return calibratedVoltage;
 }

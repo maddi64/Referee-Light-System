@@ -1,5 +1,5 @@
 // RPI Wifi
-const char* wifiSSID = "RSLX2-NSWWA001";
+const char* wifiSSID = "RLSX2-NSWWA001";
 const char* wifiPassword = "RepLogicNSWWA!";
 
 const char* mqttServer = "192.168.68.1";

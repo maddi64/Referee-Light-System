@@ -4,6 +4,8 @@ import shutil
 import zipfile
 import subprocess
 import sys
+import tempfile
+import stat
 
 app = Flask(__name__)
 
@@ -59,8 +61,14 @@ def upload():
         return "❌ Please select an update type", 400
 
     filename = file.filename.lower()
-    if not filename.endswith('.zip'):
-        return "❌ Invalid file. Please upload a .zip file.", 400
+    
+    # Validate file type based on update type
+    if update_type == 'config-update':
+        if not (filename.endswith('.sh') or filename.endswith('.py') or filename.endswith('.txt')):
+            return "❌ Invalid file for Config Update. Please upload a .sh, .py, or .txt script file.", 400
+    else:
+        if not filename.endswith('.zip'):
+            return "❌ Invalid file. Please upload a .zip file.", 400
 
     zip_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(zip_path)
@@ -166,6 +174,66 @@ rm "$0"
                            stderr=subprocess.DEVNULL)
             
             return "✅ Firmware Updater update initiated. System will restart automatically."
+        
+        elif update_type == 'config-update':
+            # Config Update - Execute uploaded script
+            script_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            # Create a secure temporary directory for script execution
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Copy script to temp directory
+                temp_script_path = os.path.join(temp_dir, filename)
+                shutil.copy2(script_path, temp_script_path)
+                
+                # Make script executable
+                os.chmod(temp_script_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH)
+                
+                try:
+                    # Determine how to execute the script based on file extension
+                    if filename.endswith('.sh'):
+                        # Execute shell script
+                        result = subprocess.run(['bash', temp_script_path], 
+                                              capture_output=True, 
+                                              text=True, 
+                                              timeout=300,  # 5 minute timeout
+                                              cwd=temp_dir)
+                    elif filename.endswith('.py'):
+                        # Execute Python script
+                        result = subprocess.run(['python3', temp_script_path], 
+                                              capture_output=True, 
+                                              text=True, 
+                                              timeout=300,  # 5 minute timeout
+                                              cwd=temp_dir)
+                    else:  # .txt or other text files
+                        # Treat as shell commands (execute with bash)
+                        result = subprocess.run(['bash', temp_script_path], 
+                                              capture_output=True, 
+                                              text=True, 
+                                              timeout=300,  # 5 minute timeout
+                                              cwd=temp_dir)
+                    
+                    # Check execution result
+                    if result.returncode == 0:
+                        success_msg = "✅ Config Update script executed successfully."
+                        if result.stdout:
+                            success_msg += f"\n\nOutput:\n{result.stdout}"
+                        return success_msg
+                    else:
+                        error_msg = f"❌ Config Update script failed with exit code {result.returncode}."
+                        if result.stderr:
+                            error_msg += f"\n\nError output:\n{result.stderr}"
+                        if result.stdout:
+                            error_msg += f"\n\nStandard output:\n{result.stdout}"
+                        return error_msg, 500
+                        
+                except subprocess.TimeoutExpired:
+                    return "❌ Config Update script timed out after 5 minutes.", 500
+                except Exception as e:
+                    return f"❌ Error executing Config Update script: {str(e)}", 500
+                finally:
+                    # Clean up uploaded file
+                    if os.path.exists(script_path):
+                        os.remove(script_path)
         
         else:
             return "❌ Invalid update type specified.", 400
