@@ -198,20 +198,20 @@ void disconnectLEDs() {
 
 void bootSequence() {
   for(int dutyCycle = 0; dutyCycle <= 255; dutyCycle++){   
-    analogWrite(refGoodDecisions[0], dutyCycle);
+    analogWrite(refBadDecisions[0], dutyCycle);
     delay(1);
-    analogWrite(refGoodDecisions[1], dutyCycle);
+    analogWrite(refBadDecisions[1], dutyCycle);
     delay(1);
-    analogWrite(refGoodDecisions[2], dutyCycle);
+    analogWrite(refBadDecisions[2], dutyCycle);
     delay(3);
   }
 
   for(int dutyCycle = 255; dutyCycle >= 0; dutyCycle--){
-    analogWrite(refGoodDecisions[0], dutyCycle);
+    analogWrite(refBadDecisions[0], dutyCycle);
     delay(1);
-    analogWrite(refGoodDecisions[1], dutyCycle);
+    analogWrite(refBadDecisions[1], dutyCycle);
     delay(1);
-    analogWrite(refGoodDecisions[2], dutyCycle);
+    analogWrite(refBadDecisions[2], dutyCycle);
     delay(3);
   }
 }
@@ -375,7 +375,7 @@ void timeRemainingBuzzer(String message) {
 
   if (message == "90" || message == "30") {
     digitalWrite(buzzerPin, HIGH);
-    buzzerTimer.once(0.5, turnOffBuzzer); 
+    buzzerTimer.once(0.2, turnOffBuzzer); 
   }
 
   if (message == "0") {

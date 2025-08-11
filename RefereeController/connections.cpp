@@ -10,7 +10,7 @@ const char* mqttServer = "192.168.68.1";
 const char* mqttUserName= "";
 const char* mqttPassword = "";
 
-int retryCounter = 0;
+//int retryCounter = 0;
 
 #ifdef TLS
 WiFiClientSecure wifiClient;
@@ -54,10 +54,10 @@ void wifiConnect() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
-    retryCounter++;
-    if (retryCounter == 15) {
-      ESP.restart();
-    }
+    // retryCounter++;
+    // if (retryCounter == 15) {
+    //   ESP.restart();
+    // }
     updateDisplay(false, false, referee, getBatteryPercentage(), "", "WiFi connection lost");
   }
   Serial.println(" connected");
