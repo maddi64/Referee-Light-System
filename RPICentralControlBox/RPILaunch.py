@@ -6,6 +6,8 @@ import os
 from gpiozero import Button, LED
 from paho.mqtt.client import Client
 
+from time import sleep
+
 # OLED display setup
 from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
@@ -19,6 +21,7 @@ MQTT_PORT = 1883
 MQTT_DECISION_TOPIC = "owlcms/decision/A"
 MQTT_DOWN_TOPIC = "owlcms/fop/down/A"
 MQTT_DECISION_REQUEST_TOPIC = "owlcms/decisionRequest/A/"
+MQTT_RESET_TOPIC = "owlcms/fop/resetDecisions/A"
 
 # === GPIO Devices ===
 switch = Button(SWITCH_PIN)
@@ -45,26 +48,30 @@ reminder_timer = None
 down_signal_time = None
 decision_lock = threading.Lock()
 down_signal_triggered = False
-# dot_counter = 0
+dot_counter = 0
 
 
 # === Functions ===
 
 def is_wifi_connected():
     try:
-        subprocess.check_output(["ping", "-c", "1", "192.168.68.60"], timeout=2)
+        subprocess.check_output(["ping", "-c", "1", "192.168.68.1"], timeout=2)
         return True
     except Exception:
         return False
         
-def is_mosquitto_running():
-    """Check if mosquitto MQTT server is running"""
+def is_dhcp_server_running():
+    """Check if isc-dhcp-server service is running"""
     try:
-        for proc in psutil.process_iter(['pid', 'name']):
-            if 'mosquitto' in proc.info['name'].lower():
-                return True
-        return False
-    except Exception:
+        result = subprocess.run(
+            ['systemctl', 'is-active', 'isc-dhcp-server'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False
+        )
+        return result.stdout.strip() == 'active'
+    except Exvception:
         return False
 
 def is_owlcms_running():
@@ -78,13 +85,16 @@ def is_owlcms_running():
         return False
     except Exception:
         return False
+        
+def system_is_ready():
+    return is_wifi_connected() and is_dhcp_server_running() and is_owlcms_running()
 
 # --- Function to draw the UI layout ---
 def draw_ui():
     
     global mqtt_connected
     wifi_status = is_wifi_connected()
-    mosquitto_status = is_mosquitto_running()
+    dhcp_status = is_dhcp_server_running()
     owlcms_status = is_owlcms_running()
     current_mode = "standalone" if switch.is_pressed else "integrated"
 
@@ -96,7 +106,7 @@ def draw_ui():
             draw.text((5, 5), 'WIFI:  ERR', fill=255, font=font)
 
         # MQTT status
-        if mosquitto_status:
+        if dhcp_status:
             draw.text((5, 25), 'SERVER:OK', fill=255, font=font)
         else:
             draw.text((5, 25), 'SERVER:ERR', fill=255, font=font)
@@ -132,6 +142,7 @@ def resetLift():
     down_signal_time = None
     down_signal_triggered = False
     print("Lift reset: Decisions and counters cleared.")
+    mqtt_client.publish(MQTT_RESET_TOPIC, "")
 
 
 def process_down_signal():
@@ -270,6 +281,13 @@ def handle_integrated():
 resetLiftBtn.when_pressed = resetLift
 
 try:
+    while not system_is_ready():
+        dot_counter = (dot_counter + 1) % 4
+        dots = "." * dot_counter if dot_counter else ""
+        with canvas(device) as draw:
+            draw.text((5, 25), f"Booting{dots}", fill=255, font=font)
+        sleep(1)
+    
     print("Starting system...")
     last_mode = None
 
