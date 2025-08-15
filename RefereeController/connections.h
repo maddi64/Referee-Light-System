@@ -29,6 +29,10 @@ extern const char* platform;
 extern char fop[20];  
 extern int referee;
 
+// WiFi credentials (declared in connections.cpp)
+extern const char* wifiSSID;
+extern const char* wifiPassword;
+
 void setupConnections();
 void wifiConnect();
 void mqttReconnect();

@@ -16,4 +16,12 @@ void updateDisplay(bool wifi_status, bool mqtt_status, int referee, int battery_
 
 void refSelectionDispay(int referee, int timer);
 
+// OTA Update interface functions
+void drawOTAWaitingScreen();
+void drawOTAProgressScreen(int progress, const String& status);
+void drawOTACompleteScreen(bool success, const String& message);
+void drawOTAErrorScreen(const String& error);
+void drawOTAReadyScreen(const String& ipAddress);
+void drawOTAUploadingScreen(int progress);
+
 #endif

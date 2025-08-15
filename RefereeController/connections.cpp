@@ -1,12 +1,12 @@
 #include "connections.h"
 
-// const char* wifiSSID = "WAP";
-// const char* wifiPassword = "Welcome98!";
+const char* wifiSSID = "Wu";
+const char* wifiPassword = "Welcome98!";
 
-const char* wifiSSID = "RLSX2-NSWWA001";
-const char* wifiPassword = "RepLogicNSWWA!";
+// const char* wifiSSID = "RLSX2-NSWWA001";
+// const char* wifiPassword = "RepLogicNSWWA!";
 // const char* mqttServer = "192.168.68.1";
-const char* mqttServer = "192.168.68.1";
+const char* mqttServer = "192.168.68.50";
 const char* mqttUserName= "";
 const char* mqttPassword = "";
 

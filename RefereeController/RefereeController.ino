@@ -1,6 +1,11 @@
 // ====== START CONFIG SECTION ======================================================
 #include <Arduino.h>
 #include <esp_system.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Update.h>
 #include <EEPROM.h>
 #include <U8g2lib.h>
 #include <Wire.h>
@@ -75,6 +80,11 @@ void changeSummonStatus(int ref02Number, boolean warn);
 void assignBreak(String stMessage);
 void callback(char* topic, byte* message, unsigned int length);
 void updateDisplayWithPriority(bool wifi_status, bool mqtt_status, int referee, int battery_percent, const String& mainText, const String& warning, const String& reminder);
+bool checkOTABootCondition();
+void switchToOTAPartition();
+void startOTAWebServer();
+void handleOTAUpload();
+void handleOTAUploadFinish();
 
 // ====== Function Definitions ======================================================
 
@@ -353,6 +363,194 @@ void noWarning() {
   updateDisplayWithPriority(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), "", warningMessage, reminderMessage);
 }
 
+bool checkOTABootCondition() {
+  Serial.println("Checking for OTA boot condition (A+B buttons held for 5 seconds)...");
+  
+  // Check if both buttons are pressed initially
+  if (digitalRead(decisionPins[0]) != LOW || digitalRead(decisionPins[1]) != LOW) {
+    return false;  // One or both buttons not pressed
+  }
+  
+  unsigned long startTime = millis();
+  const unsigned long holdDuration = 5000;  // 5 seconds
+  
+  while (millis() - startTime < holdDuration) {
+    // Check if either button is released
+    if (digitalRead(decisionPins[0]) != LOW || digitalRead(decisionPins[1]) != LOW) {
+      Serial.println("Button(s) released before 5 seconds - normal boot");
+      return false;
+    }
+    delay(50);  // Small delay to prevent excessive polling
+  }
+  
+  Serial.println("Both buttons held for 5 seconds - switching to OTA partition");
+  return true;
+}
+
+WebServer otaServer(80);
+
+void startOTAWebServer() {
+  Serial.println("Starting OTA Web Server...");
+  
+  // Connect to WiFi (reuse existing credentials)
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(wifiSSID, wifiPassword);  // Use existing WiFi credentials from connections.cpp
+
+  drawOTAWaitingScreen();
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    delay(1000);
+    Serial.print(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Failed to connect to WiFi");
+    drawOTAErrorScreen("WiFi connection failed");
+    delay(5000);
+    esp_restart();
+    return;
+  }
+  
+  Serial.println("");
+  Serial.print("WiFi connected. IP address: ");
+  Serial.println(WiFi.localIP());
+  
+  // Show IP address on display
+  drawOTAReadyScreen(WiFi.localIP().toString());
+  
+  // Set up web server routes
+  otaServer.on("/", HTTP_GET, []() {
+    String html = "<!DOCTYPE html><html><head><title>RLSX2 Controller Update</title></head><body>";
+    html += "<h1>RLSX2 Controller Update</h1>";
+    html += "<form method='POST' action='/update' enctype='multipart/form-data'>";
+    html += "<input type='file' name='firmware' accept='.bin'><br><br>";
+    html += "<input type='submit' value='Upload Firmware'>";
+    html += "</form></body></html>";
+    otaServer.send(200, "text/html", html);
+  });
+  
+  otaServer.on("/update", HTTP_POST, handleOTAUploadFinish, handleOTAUpload);
+  
+  otaServer.begin();
+  Serial.println("OTA Web Server started");
+  
+  // Keep server running
+  while (true) {
+    otaServer.handleClient();
+    delay(10);
+  }
+}
+
+void handleOTAUpload() {
+  HTTPUpload& upload = otaServer.upload();
+  static int lastProgress = -1;
+  
+  if (upload.status == UPLOAD_FILE_START) {
+    Serial.printf("Update Start: %s\n", upload.filename.c_str());
+    drawOTAUploadingScreen(0);
+    
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+      Update.printError(Serial);
+      drawOTAErrorScreen("Update begin failed");
+      return;
+    }
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      Update.printError(Serial);
+      drawOTAErrorScreen("Update write failed");
+      return;
+    }
+    
+    // Calculate and display progress
+    int progress = (Update.progress() * 100) / Update.size();
+    if (progress != lastProgress && progress % 5 == 0) {  // Update display every 5%
+      drawOTAUploadingScreen(progress);
+      lastProgress = progress;
+      Serial.printf("Progress: %d%%\n", progress);
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (Update.end(true)) {
+      Serial.printf("Update Success: %uB\n", upload.totalSize);
+      drawOTACompleteScreen(true, "Upload complete");
+    } else {
+      Update.printError(Serial);
+      drawOTAErrorScreen("Update end failed");
+    }
+  }
+}
+
+void handleOTAUploadFinish() {
+  if (Update.hasError()) {
+    otaServer.send(500, "text/plain", "Update failed");
+    drawOTAErrorScreen("Update failed");
+  } else {
+    otaServer.send(200, "text/plain", "Update successful! Device will restart.");
+    drawOTACompleteScreen(true, "Restarting in 3s");
+    delay(3000);
+    esp_restart();
+  }
+}
+
+void switchToOTAPartition() {
+  Serial.println("Switching to OTA partition...");
+  
+  // Initialize display for OTA mode
+  digitalWrite(DISPLAY_POWER_PIN, LOW);  // Connect to ground
+  delay(500);  // Wait for display to stabilize
+  
+  // Initialize I2C and display
+  Wire.begin(SDA_PIN, SCL_PIN);
+  u8g2.begin();
+  u8g2.clearBuffer();
+  u8g2.sendBuffer();
+  delay(200);
+  u8g2.enableUTF8Print();
+  u8g2.setContrast(255);
+  
+  // Show OTA waiting screen
+  drawOTAWaitingScreen();
+  delay(2000);  // Show the screen for 2 seconds before switching
+  
+  // Get the currently running partition
+  const esp_partition_t* current_partition = esp_ota_get_running_partition();
+  Serial.print("Current partition: ");
+  Serial.println(current_partition->label);
+  
+  // Find the OTA partition (assuming it's the other OTA partition)
+  const esp_partition_t* ota_partition = esp_ota_get_next_update_partition(current_partition);
+  
+  if (ota_partition == NULL) {
+    Serial.println("ERROR: No OTA partition found!");
+    drawOTAErrorScreen("No OTA partition found");
+    delay(3000);
+    return;
+  }
+  
+  Serial.print("Switching to partition: ");
+  Serial.println(ota_partition->label);
+  
+  // Show switching screen
+  drawOTAProgressScreen(100, "Partition switched");
+  delay(2000);
+  
+  // Set the OTA partition as the boot partition
+  esp_err_t err = esp_ota_set_boot_partition(ota_partition);
+  if (err != ESP_OK) {
+    Serial.print("ERROR: Failed to set boot partition: ");
+    Serial.println(esp_err_to_name(err));
+    drawOTAErrorScreen("Failed to set boot partition");
+    delay(3000);
+    return;
+  }
+  
+  Serial.println("Boot partition set successfully. Starting OTA server...");
+  
+  // Instead of restarting, start the OTA web server
+  startOTAWebServer();
+}
+
 void lowBatteryCheck() {
   //updateDisplay(WiFi.status() == WL_CONNECTED, mqttClient.connected(), referee, getBatteryPercentage(), "", "BATTERY LOW. PLEASE CHARGE.");
   if (lowBattery == true) {
@@ -396,11 +594,70 @@ void setup() {
   setupBatteryPins();
   setupPins();
   
+  // Check for OTA boot condition first (A+B buttons held for 5 seconds)
+  if (checkOTABootCondition()) {
+    Serial.println("OTA boot condition detected - initializing display and switching partition");
+    switchToOTAPartition();
+    // This function will restart the ESP32, so code below won't execute
+    return;
+  }
+  
   // Initialize battery EEPROM data
   initializeBatteryEEPROM();
   
-  // This will power up the display and show selection
-  setRefNumber();
+  // Check if button A is held for 10 seconds to enter ref selection mode
+  Serial.println("Checking for button A hold to enter ref selection mode...");
+  unsigned long buttonHoldStart = millis();
+  bool enterRefSelection = false;
+  
+  while (millis() - buttonHoldStart < 5000) {  // 10 second window
+    if (digitalRead(decisionPins[0]) == LOW) {  // Button A pressed
+      // Check if held for full 10 seconds
+      unsigned long holdStart = millis();
+      bool stillHeld = true;
+      
+      while (millis() - holdStart < 10000 && stillHeld) {  // Must hold for 10 seconds
+        if (digitalRead(decisionPins[0]) == HIGH) {  // Button released
+          stillHeld = false;
+          Serial.println("Button A released before 10 seconds");
+          break;
+        }
+        delay(50);  // Small delay to prevent excessive polling
+      }
+      
+      if (stillHeld) {
+        Serial.println("Button A held for 10 seconds - entering ref selection mode");
+        enterRefSelection = true;
+        break;
+      }
+    }
+    delay(100);  // Check every 100ms
+  }
+  
+  if (enterRefSelection) {
+    // Power up display and enter ref selection mode
+    setRefNumber();
+  } else {
+    // Load referee from EEPROM without showing selection screen
+    if (EEPROM.read(0) == 255) {
+      referee = 1;
+    } else {
+      referee = EEPROM.read(0);
+    }
+    Serial.print("Using stored referee number: ");
+    Serial.println(referee);
+    
+    // Power up the display for normal operation
+    digitalWrite(DISPLAY_POWER_PIN, LOW);  // Connect to ground
+    delay(500);  // Wait for display to stabilize
+    
+    // Initialize I2C and display
+    Wire.begin(SDA_PIN, SCL_PIN);
+    u8g2.begin();
+    u8g2.clearBuffer();
+    u8g2.sendBuffer();
+    delay(200);
+  }
   
   // EEPROM was already initialized above for restart logic
   // No need to call EEPROM.begin() again in setRefNumber()
